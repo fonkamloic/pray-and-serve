@@ -28,8 +28,8 @@
 - [x] Full description — see `assets/store_listing.txt`
 - [x] Feature graphic 1024x500 (`assets/feature_graphic.png`)
 - [x] App category: Lifestyle
-- [x] Privacy policy URL: `https://flutterplaza.github.io/pray-and-serve/privacy.html`
-- [x] Support URL: `https://flutterplaza.github.io/pray-and-serve/support.html`
+- [x] Privacy policy URL: `https://fonkamloic.github.io/pray-and-serve/privacy.html`
+- [x] Support URL: `https://fonkamloic.github.io/pray-and-serve/support.html`
 
 ## 5. Privacy & Compliance
 - [x] Write privacy policy (`assets/privacy_policy.html`)

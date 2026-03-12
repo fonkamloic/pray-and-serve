@@ -51,12 +51,12 @@ prayer, prayer tracker, journal, spiritual journal, pastoral care, flock managem
 ------------------------------------------------------------
 PRIVACY POLICY URL (required)
 ------------------------------------------------------------
-https://flutterplaza.github.io/pray-and-serve/privacy.html
+https://fonkamloic.github.io/pray-and-serve/privacy.html
 
 ------------------------------------------------------------
 SUPPORT URL / CONTACT
 ------------------------------------------------------------
-https://flutterplaza.github.io/pray-and-serve/support.html
+https://fonkamloic.github.io/pray-and-serve/support.html
 
 ------------------------------------------------------------
 SCREENSHOTS NEEDED
