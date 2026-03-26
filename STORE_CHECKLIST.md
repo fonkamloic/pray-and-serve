@@ -29,7 +29,7 @@
 - [x] Feature graphic 1024x500 (`assets/feature_graphic.png`)
 - [x] App category: Lifestyle
 - [x] Privacy policy URL: `https://fonkamloic.github.io/pray-and-serve/privacy.html`
-- [x] Support URL: `https://fonkamloic.github.io/pray-and-serve/support.html`
+- [x] Support URL: `https://www.fonkamloic.com/#contact`
 
 ## 5. Privacy & Compliance
 - [x] Write privacy policy (`assets/privacy_policy.html`)

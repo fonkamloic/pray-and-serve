@@ -239,7 +239,9 @@ class _HomeScreenState extends State<HomeScreen> {
     // Reserve at least 150px for tab content; cap header height on short screens.
     final maxHeaderHeight = (screenHeight - 150).clamp(150.0, screenHeight);
 
-    return Scaffold(
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
       body: Column(
         children: [
           ConstrainedBox(
@@ -271,6 +273,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
+    ),
     );
   }
 
