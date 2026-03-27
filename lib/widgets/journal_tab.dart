@@ -6,15 +6,43 @@ import '../models/journal_entry.dart';
 import '../screens/home_screen.dart';
 import 'bottom_sheet_modal.dart';
 
-class JournalTab extends StatelessWidget {
+class JournalTab extends StatefulWidget {
   final List<JournalEntry> journal;
   final void Function(List<JournalEntry> Function(List<JournalEntry>)) onUpdate;
+  final String? pendingText;
+  final VoidCallback? onPendingConsumed;
 
-  const JournalTab({super.key, required this.journal, required this.onUpdate});
+  const JournalTab({
+    super.key,
+    required this.journal,
+    required this.onUpdate,
+    this.pendingText,
+    this.onPendingConsumed,
+  });
 
-  void _showJournalModal(BuildContext context, {JournalEntry? existing}) {
+  @override
+  State<JournalTab> createState() => _JournalTabState();
+}
+
+class _JournalTabState extends State<JournalTab> {
+  @override
+  void didUpdateWidget(JournalTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.pendingText != null &&
+        widget.pendingText != oldWidget.pendingText) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _showJournalModal(context, prefillBody: widget.pendingText!);
+          widget.onPendingConsumed?.call();
+        }
+      });
+    }
+  }
+
+  void _showJournalModal(BuildContext context,
+      {JournalEntry? existing, String? prefillBody}) {
     var title = existing?.title ?? '';
-    var body = existing?.body ?? '';
+    var body = existing?.body ?? (prefillBody ?? '');
     var scripture = existing?.scripture ?? '';
     var reflection = existing?.reflection ?? '';
 
@@ -25,7 +53,7 @@ class JournalTab extends StatelessWidget {
       canSave: () => body.trim().isNotEmpty,
       onSave: () {
         if (existing != null) {
-          onUpdate((prev) => prev.map((j) {
+          widget.onUpdate((prev) => prev.map((j) {
                 if (j.id == existing.id) {
                   j.title = title;
                   j.body = body;
@@ -35,7 +63,7 @@ class JournalTab extends StatelessWidget {
                 return j;
               }).toList());
         } else {
-          onUpdate((prev) => [
+          widget.onUpdate((prev) => [
                 JournalEntry(
                   id: const Uuid().v4(),
                   date: todayStr(),
@@ -54,7 +82,7 @@ class JournalTab extends StatelessWidget {
           children: [
             buildFieldLabel('Title (optional)'),
             TextField(
-              autofocus: true,
+              autofocus: prefillBody == null,
               controller: TextEditingController(text: title),
               style: GoogleFonts.sourceSans3(
                   fontSize: 14, color: AppColors.textPrimary),
@@ -65,6 +93,7 @@ class JournalTab extends StatelessWidget {
             ),
             buildFieldLabel("What's on your heart?"),
             TextField(
+              autofocus: prefillBody != null,
               controller: TextEditingController(text: body),
               style: GoogleFonts.sourceSans3(
                   fontSize: 14, color: AppColors.textPrimary),
@@ -116,7 +145,7 @@ class JournalTab extends StatelessWidget {
           ),
           TextButton(
             onPressed: () {
-              onUpdate(
+              widget.onUpdate(
                   (prev) => prev.where((x) => x.id != entry.id).toList());
               Navigator.pop(ctx);
             },
@@ -130,7 +159,7 @@ class JournalTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sorted = List<JournalEntry>.from(journal)
+    final sorted = List<JournalEntry>.from(widget.journal)
       ..sort((a, b) => b.date.compareTo(a.date));
 
     return Padding(
@@ -202,7 +231,7 @@ class JournalTab extends StatelessWidget {
               'Write what God is placing on your heart.',
               style: GoogleFonts.sourceSans3(
                   fontSize: 14, color: AppColors.textDim),
-          ),
+            ),
           ],
         ),
       ),

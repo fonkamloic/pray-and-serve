@@ -38,6 +38,7 @@ dependencies:
   flutter_local_notifications: ^18.0.0
   timezone: ^0.10.0
   flutter_timezone: ^3.0.0
+  receive_sharing_intent: ^1.4.5
 
 dev_dependencies:
   flutter_test:

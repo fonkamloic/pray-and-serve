@@ -10,6 +10,7 @@ class Prayer {
   bool answered;
   String? answeredAt;
   String? answerNote;
+  String? personId;
 
   Prayer({
     required this.id,
@@ -23,6 +24,7 @@ class Prayer {
     this.answered = false,
     this.answeredAt,
     this.answerNote,
+    this.personId,
   });
 
   Map<String, dynamic> toJson() => {
@@ -37,6 +39,7 @@ class Prayer {
         'answered': answered,
         'answeredAt': answeredAt,
         'answerNote': answerNote,
+        'personId': personId,
       };
 
   factory Prayer.fromJson(Map<String, dynamic> json) => Prayer(
@@ -51,5 +54,6 @@ class Prayer {
         answered: json['answered'] as bool? ?? false,
         answeredAt: json['answeredAt'] as String?,
         answerNote: json['answerNote'] as String?,
+        personId: json['personId'] as String?,
       );
 }

@@ -3,15 +3,26 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:uuid/uuid.dart';
 import '../theme/app_theme.dart';
 import '../models/prayer.dart';
+import '../models/person.dart';
 import '../models/constants.dart';
 import '../screens/home_screen.dart';
 import 'bottom_sheet_modal.dart';
 
 class PrayTab extends StatefulWidget {
   final List<Prayer> prayers;
+  final List<Person> flock;
   final void Function(List<Prayer> Function(List<Prayer>)) onUpdate;
+  final String? pendingText;
+  final VoidCallback? onPendingConsumed;
 
-  const PrayTab({super.key, required this.prayers, required this.onUpdate});
+  const PrayTab({
+    super.key,
+    required this.prayers,
+    required this.flock,
+    required this.onUpdate,
+    this.pendingText,
+    this.onPendingConsumed,
+  });
 
   @override
   State<PrayTab> createState() => _PrayTabState();
@@ -21,6 +32,20 @@ class _PrayTabState extends State<PrayTab> {
   String _filter = 'all';
   String _searchText = '';
   final _searchController = TextEditingController();
+
+  @override
+  void didUpdateWidget(PrayTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.pendingText != null &&
+        widget.pendingText != oldWidget.pendingText) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _showPrayerModal(prefillText: widget.pendingText!);
+          widget.onPendingConsumed?.call();
+        }
+      });
+    }
+  }
 
   List<Prayer> get _filteredPrayers {
     return widget.prayers.where((p) {
@@ -39,13 +64,14 @@ class _PrayTabState extends State<PrayTab> {
     }).toList();
   }
 
-  void _showPrayerModal({Prayer? existing}) {
+  void _showPrayerModal({Prayer? existing, String? prefillText}) {
     var title = existing?.title ?? '';
-    var details = existing?.details ?? '';
+    var details = existing?.details ?? (prefillText ?? '');
     var category = existing?.category ?? 'Personal';
     var urgency = existing?.urgency ?? 'Ongoing';
     var scripture = existing?.scripture ?? '';
     var recurrence = existing?.recurrence ?? 'None';
+    var linkedPersonId = existing?.personId;
 
     showAppBottomSheet(
       context: context,
@@ -62,6 +88,7 @@ class _PrayTabState extends State<PrayTab> {
                   p.urgency = urgency;
                   p.scripture = scripture;
                   p.recurrence = recurrence;
+                  p.personId = linkedPersonId;
                 }
                 return p;
               }).toList());
@@ -76,6 +103,7 @@ class _PrayTabState extends State<PrayTab> {
                   scripture: scripture,
                   recurrence: recurrence,
                   createdAt: todayStr(),
+                  personId: linkedPersonId,
                 ),
                 ...prev,
               ]);
@@ -87,7 +115,7 @@ class _PrayTabState extends State<PrayTab> {
           children: [
             buildFieldLabel('What would you like to pray for?'),
             TextField(
-              autofocus: true,
+              autofocus: prefillText == null,
               controller: TextEditingController(text: title),
               style: GoogleFonts.sourceSans3(
                   fontSize: 14, color: AppColors.textPrimary),
@@ -98,6 +126,7 @@ class _PrayTabState extends State<PrayTab> {
             ),
             buildFieldLabel('Details (optional)'),
             TextField(
+              autofocus: prefillText != null,
               controller: TextEditingController(text: details),
               style: GoogleFonts.sourceSans3(
                   fontSize: 14, color: AppColors.textPrimary),
@@ -107,6 +136,43 @@ class _PrayTabState extends State<PrayTab> {
               ),
               onChanged: (v) => details = v,
             ),
+            if (widget.flock.isNotEmpty) ...[
+              buildFieldLabel('Praying for (optional)'),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(
+                  color: AppColors.bgInput,
+                  border: Border.all(color: AppColors.border),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String?>(
+                    value: linkedPersonId,
+                    isExpanded: true,
+                    dropdownColor: AppColors.bgCard,
+                    style: GoogleFonts.sourceSans3(
+                        fontSize: 14, color: AppColors.textPrimary),
+                    items: [
+                      DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text(
+                          'No one specific',
+                          style: GoogleFonts.sourceSans3(
+                              fontSize: 14, color: AppColors.textMuted),
+                        ),
+                      ),
+                      ...widget.flock.map((p) => DropdownMenuItem<String?>(
+                            value: p.id,
+                            child: Text(p.name),
+                          )),
+                    ],
+                    onChanged: (v) =>
+                        setModalState(() => linkedPersonId = v),
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 8),
             Row(
               children: [
@@ -409,13 +475,16 @@ class _PrayTabState extends State<PrayTab> {
             ? AppColors.gold
             : AppColors.olive;
 
+    final linkedPerson = p.personId != null
+        ? widget.flock.where((f) => f.id == p.personId).firstOrNull
+        : null;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.bgCard,
         border: Border.all(color: AppColors.border),
         borderRadius: BorderRadius.circular(14),
-        // Left border accent
       ),
       foregroundDecoration: p.answered
           ? BoxDecoration(
@@ -538,6 +607,21 @@ class _PrayTabState extends State<PrayTab> {
               height: 1.3,
             ),
           ),
+          if (linkedPerson != null) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.person_outline,
+                    size: 12, color: AppColors.gold),
+                const SizedBox(width: 4),
+                Text(
+                  linkedPerson.name,
+                  style: GoogleFonts.sourceSans3(
+                      fontSize: 12, color: AppColors.gold),
+                ),
+              ],
+            ),
+          ],
           if (p.details.isNotEmpty) ...[
             const SizedBox(height: 6),
             Text(p.details,

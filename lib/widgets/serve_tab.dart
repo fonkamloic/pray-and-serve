@@ -16,6 +16,8 @@ class ServeTab extends StatefulWidget {
   final List<CareLog> careLogs;
   final void Function(List<Person> Function(List<Person>)) onUpdateFlock;
   final void Function(List<CareLog> Function(List<CareLog>)) onUpdateCareLogs;
+  final String? pendingText;
+  final VoidCallback? onPendingConsumed;
 
   const ServeTab({
     super.key,
@@ -25,6 +27,8 @@ class ServeTab extends StatefulWidget {
     required this.careLogs,
     required this.onUpdateFlock,
     required this.onUpdateCareLogs,
+    this.pendingText,
+    this.onPendingConsumed,
   });
 
   @override
@@ -35,6 +39,20 @@ class _ServeTabState extends State<ServeTab> {
   int _subTab = 0;
   String _searchText = '';
   final _searchController = TextEditingController();
+
+  @override
+  void didUpdateWidget(ServeTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.pendingText != null &&
+        widget.pendingText != oldWidget.pendingText) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _showPersonModal(prefillNotes: widget.pendingText!);
+          widget.onPendingConsumed?.call();
+        }
+      });
+    }
+  }
 
   String get _sectionTitle {
     switch (widget.role) {
@@ -60,9 +78,9 @@ class _ServeTabState extends State<ServeTab> {
           contactFreqToDays(p.contactFreq, widget.reminderDays))
       .toList();
 
-  void _showPersonModal({Person? existing}) {
+  void _showPersonModal({Person? existing, String? prefillNotes}) {
     var name = existing?.name ?? '';
-    var notes = existing?.notes ?? '';
+    var notes = existing?.notes ?? (prefillNotes ?? '');
     var selectedTags = List<String>.from(existing?.tags ?? []);
     var selectedNeeds = List<String>.from(existing?.needs ?? []);
     var contactFreq = existing?.contactFreq ?? 'Monthly';

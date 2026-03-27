@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import '../theme/app_theme.dart';
 import '../services/storage_service.dart';
 import '../services/notification_service.dart';
@@ -69,6 +71,12 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Person> _flock = [];
   List<CareLog> _careLogs = [];
 
+  String? _pendingPrayText;
+  String? _pendingJournalText;
+  String? _pendingServeText;
+
+  StreamSubscription? _sharingSubscription;
+
   bool _prayReminderEnabled = false;
   TimeOfDay _prayReminderTime = const TimeOfDay(hour: 7, minute: 0);
   bool _journalReminderEnabled = false;
@@ -80,6 +88,83 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadData();
+    _initSharingListener();
+  }
+
+  void _initSharingListener() {
+    _sharingSubscription = ReceiveSharingIntent.instance
+        .getMediaStream()
+        .listen((List<SharedMediaFile> files) {
+      final text = files
+          .where((f) => f.type == SharedMediaType.text)
+          .map((f) => f.path)
+          .join('\n');
+      if (text.isNotEmpty) _handleSharedText(text);
+    });
+    ReceiveSharingIntent.instance
+        .getInitialMedia()
+        .then((List<SharedMediaFile> files) {
+      final text = files
+          .where((f) => f.type == SharedMediaType.text)
+          .map((f) => f.path)
+          .join('\n');
+      if (text.isNotEmpty) {
+        _handleSharedText(text);
+        ReceiveSharingIntent.instance.reset();
+      }
+    });
+  }
+
+  Future<void> _handleSharedText(String text) async {
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.bgCard,
+        title: Text(
+          'Save shared text as...',
+          style: GoogleFonts.cormorantGaramond(
+              fontSize: 20, color: AppColors.textPrimary),
+        ),
+        content: Text(
+          text.length > 100 ? '${text.substring(0, 100)}...' : text,
+          style: GoogleFonts.sourceSans3(
+              fontSize: 13, color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'pray'),
+            child: const Text('Prayer'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'journal'),
+            child: const Text('Journal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'serve'),
+            child: const Text('Serve'),
+          ),
+        ],
+      ),
+    );
+    if (choice == null) return;
+    setState(() {
+      if (choice == 'pray') {
+        _tabIndex = 0;
+        _pendingPrayText = text;
+      } else if (choice == 'journal') {
+        _tabIndex = 1;
+        _pendingJournalText = text;
+      } else {
+        _tabIndex = 2;
+        _pendingServeText = text;
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _sharingSubscription?.cancel();
+    super.dispose();
   }
 
   void _loadData() {
@@ -254,11 +339,18 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 PrayTab(
                   prayers: _prayers,
+                  flock: _flock,
                   onUpdate: updatePrayers,
+                  pendingText: _pendingPrayText,
+                  onPendingConsumed: () =>
+                      setState(() => _pendingPrayText = null),
                 ),
                 JournalTab(
                   journal: _journal,
                   onUpdate: updateJournal,
+                  pendingText: _pendingJournalText,
+                  onPendingConsumed: () =>
+                      setState(() => _pendingJournalText = null),
                 ),
                 ServeTab(
                   role: _role,
@@ -267,6 +359,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   careLogs: _careLogs,
                   onUpdateFlock: updateFlock,
                   onUpdateCareLogs: updateCareLogs,
+                  pendingText: _pendingServeText,
+                  onPendingConsumed: () =>
+                      setState(() => _pendingServeText = null),
                 ),
               ],
             ),
