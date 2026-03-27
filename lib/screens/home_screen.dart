@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:local_auth/local_auth.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import '../theme/app_theme.dart';
 import '../services/storage_service.dart';
@@ -13,6 +14,7 @@ import '../models/constants.dart';
 import '../widgets/pray_tab.dart';
 import '../widgets/journal_tab.dart';
 import '../widgets/serve_tab.dart';
+import '../services/backup_service.dart';
 
 int daysAgo(String? dateStr) {
   if (dateStr == null || dateStr.isEmpty) return 999999;
@@ -76,6 +78,9 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _pendingServeText;
 
   StreamSubscription? _sharingSubscription;
+
+  bool _biometricEnabled = false;
+  final _localAuth = LocalAuthentication();
 
   bool _prayReminderEnabled = false;
   TimeOfDay _prayReminderTime = const TimeOfDay(hour: 7, minute: 0);
@@ -190,6 +195,7 @@ class _HomeScreenState extends State<HomeScreen> {
         hour: widget.storage.getServeReminderHour(),
         minute: widget.storage.getServeReminderMinute(),
       );
+      _biometricEnabled = widget.storage.getBiometricEnabled();
     });
   }
 
@@ -315,6 +321,82 @@ class _HomeScreenState extends State<HomeScreen> {
       if (_serveReminderEnabled) {
         await widget.notifications.scheduleServeCheckReminder(picked);
       }
+    }
+  }
+
+  Future<void> _toggleBiometric(bool enabled) async {
+    if (enabled) {
+      final canCheck = await _localAuth.canCheckBiometrics ||
+          await _localAuth.isDeviceSupported();
+      if (!canCheck) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('No biometrics available on this device.'),
+          ));
+        }
+        return;
+      }
+      final authenticated = await _localAuth.authenticate(
+        localizedReason: 'Authenticate to enable biometric lock',
+        options: const AuthenticationOptions(biometricOnly: false),
+      );
+      if (!authenticated) return;
+    }
+    setState(() => _biometricEnabled = enabled);
+    await widget.storage.setBiometricEnabled(enabled);
+  }
+
+  Future<void> _exportBackup() async {
+    try {
+      await BackupService(widget.storage).exportBackup();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Export failed: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _importBackup() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.bgCard,
+        title: Text('Replace all data?',
+            style: GoogleFonts.cormorantGaramond(
+                fontSize: 20, color: AppColors.textPrimary)),
+        content: Text(
+          'This will overwrite all your current prayers, journal entries, and flock with the backup data.',
+          style: GoogleFonts.sourceSans3(
+              fontSize: 14, color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Import',
+                style: TextStyle(color: AppColors.gold)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final error = await BackupService(widget.storage).importBackup();
+    if (!mounted) return;
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error)),
+      );
+    } else {
+      _loadData();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Backup restored successfully.')),
+      );
     }
   }
 
@@ -563,6 +645,75 @@ class _HomeScreenState extends State<HomeScreen> {
             time: _serveReminderTime,
             onToggle: _toggleServeReminder,
             onPickTime: _pickServeReminderTime,
+          ),
+          const SizedBox(height: 12),
+          const Divider(color: AppColors.borderLight, height: 1),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text('SECURITY',
+                style: GoogleFonts.sourceSans3(
+                    fontSize: 11,
+                    color: AppColors.textMuted,
+                    letterSpacing: 1.5)),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Biometric Lock',
+                  style: GoogleFonts.sourceSans3(
+                      fontSize: 14, color: AppColors.textSecondary)),
+              SizedBox(
+                height: 32,
+                child: Switch.adaptive(
+                  value: _biometricEnabled,
+                  activeTrackColor: AppColors.gold,
+                  onChanged: _toggleBiometric,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Divider(color: AppColors.borderLight, height: 1),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text('DATA',
+                style: GoogleFonts.sourceSans3(
+                    fontSize: 11,
+                    color: AppColors.textMuted,
+                    letterSpacing: 1.5)),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _exportBackup,
+                  icon: const Icon(Icons.upload_outlined, size: 16),
+                  label: const Text('Export Backup'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.gold,
+                    side: const BorderSide(color: AppColors.border),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _importBackup,
+                  icon: const Icon(Icons.download_outlined, size: 16),
+                  label: const Text('Import Backup'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.gold,
+                    side: const BorderSide(color: AppColors.border),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

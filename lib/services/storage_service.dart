@@ -16,6 +16,11 @@ class StorageService {
   String getRole() => _prefs.getString('ps-role') ?? 'Member';
   Future<void> setRole(String role) => _prefs.setString('ps-role', role);
 
+  // Biometric lock
+  bool getBiometricEnabled() => _prefs.getBool('ps-biometric-enabled') ?? false;
+  Future<void> setBiometricEnabled(bool v) =>
+      _prefs.setBool('ps-biometric-enabled', v);
+
   // Reminder days
   int getReminderDays() => _prefs.getInt('ps-reminderdays') ?? 14;
   Future<void> setReminderDays(int days) =>

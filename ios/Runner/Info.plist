@@ -70,5 +70,7 @@
 		<false/>
 		<key>ITSAppUsesNonExemptEncryption</key>
 		<false/>
+		<key>NSFaceIDUsageDescription</key>
+		<string>Pray &amp; Serve uses Face ID to protect your private data.</string>
 	</dict>
 </plist>
