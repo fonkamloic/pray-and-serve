@@ -979,6 +979,7 @@ class _PrayTabHostState extends State<_PrayTabHost> {
     return Scaffold(
       body: PrayTab(
         prayers: _prayers,
+        flock: const [],
         onUpdate: _updatePrayers,
       ),
     );

@@ -1,16 +1,40 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 import '../models/prayer.dart';
 import '../models/journal_entry.dart';
 import '../models/person.dart';
 import '../models/care_log.dart';
+import '../models/paired_device.dart';
+import '../models/serve_group.dart';
 
 class StorageService {
   late SharedPreferences _prefs;
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
+    // Ensure a stable device ID exists from first launch onwards.
+    if (_prefs.getString('ps-device-id') == null) {
+      await _prefs.setString('ps-device-id', const Uuid().v4());
+    }
   }
+
+  // Device identity
+  String getDeviceId() => _prefs.getString('ps-device-id')!;
+
+  // Paired devices
+  List<PairedDevice> getPairedDevices() {
+    final raw = _prefs.getString('ps-paired-devices');
+    if (raw == null) return [];
+    final list = jsonDecode(raw) as List;
+    return list
+        .map((e) => PairedDevice.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> savePairedDevices(List<PairedDevice> devices) =>
+      _prefs.setString('ps-paired-devices',
+          jsonEncode(devices.map((e) => e.toJson()).toList()));
 
   // Role
   String getRole() => _prefs.getString('ps-role') ?? 'Member';
@@ -35,7 +59,8 @@ class StorageService {
   }
 
   Future<void> savePrayers(List<Prayer> prayers) =>
-      _prefs.setString('ps-prayers', jsonEncode(prayers.map((e) => e.toJson()).toList()));
+      _prefs.setString('ps-prayers',
+          jsonEncode(prayers.map((e) => e.toJson()).toList()));
 
   // Journal
   List<JournalEntry> getJournal() {
@@ -48,7 +73,8 @@ class StorageService {
   }
 
   Future<void> saveJournal(List<JournalEntry> entries) =>
-      _prefs.setString('ps-journal', jsonEncode(entries.map((e) => e.toJson()).toList()));
+      _prefs.setString('ps-journal',
+          jsonEncode(entries.map((e) => e.toJson()).toList()));
 
   // Flock (people)
   List<Person> getFlock() {
@@ -61,7 +87,8 @@ class StorageService {
   }
 
   Future<void> saveFlock(List<Person> people) =>
-      _prefs.setString('ps-flock', jsonEncode(people.map((e) => e.toJson()).toList()));
+      _prefs.setString(
+          'ps-flock', jsonEncode(people.map((e) => e.toJson()).toList()));
 
   // Care logs
   List<CareLog> getCareLogs() {
@@ -74,7 +101,22 @@ class StorageService {
   }
 
   Future<void> saveCareLogs(List<CareLog> logs) =>
-      _prefs.setString('ps-carelogs', jsonEncode(logs.map((e) => e.toJson()).toList()));
+      _prefs.setString(
+          'ps-carelogs', jsonEncode(logs.map((e) => e.toJson()).toList()));
+
+  // Serve groups
+  List<ServeGroup> getServeGroups() {
+    final raw = _prefs.getString('ps-serve-groups');
+    if (raw == null) return [];
+    final list = jsonDecode(raw) as List;
+    return list
+        .map((e) => ServeGroup.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> saveServeGroups(List<ServeGroup> groups) =>
+      _prefs.setString(
+          'ps-serve-groups', jsonEncode(groups.map((e) => e.toJson()).toList()));
 
   // Notification preferences — Prayer
   bool getPrayReminderEnabled() =>

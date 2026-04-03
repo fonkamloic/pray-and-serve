@@ -47,11 +47,21 @@ class _PrayTabState extends State<PrayTab> {
     }
   }
 
+  /// People from the flock who have at least one prayer linked to them.
+  List<Person> get _flockWithPrayers {
+    final linkedIds =
+        widget.prayers.map((p) => p.personId).whereType<String>().toSet();
+    return widget.flock.where((p) => linkedIds.contains(p.id)).toList();
+  }
+
   List<Prayer> get _filteredPrayers {
     return widget.prayers.where((p) {
       if (_filter == 'answered') return p.answered;
       if (_filter == 'unanswered') return !p.answered;
       if (_filter == 'pressing') return p.urgency == 'Pressing' && !p.answered;
+      if (_filter.startsWith('person:')) {
+        return p.personId == _filter.substring(7);
+      }
       if (categories.contains(_filter)) {
         return p.category == _filter && !p.answered;
       }
@@ -384,6 +394,18 @@ class _PrayTabState extends State<PrayTab> {
                   ),
                 ),
                 ...categories.map((c) => _buildFilterChip(c, c)),
+                if (_flockWithPrayers.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Container(
+                        width: 1, height: 20, color: AppColors.border),
+                  ),
+                  ..._flockWithPrayers.map((p) => _buildFilterChip(
+                        p.name,
+                        'person:${p.id}',
+                        icon: Icons.person_outline,
+                      )),
+                ],
               ],
             ),
           ),
@@ -405,17 +427,15 @@ class _PrayTabState extends State<PrayTab> {
     );
   }
 
-  Widget _buildFilterChip(String label, String value) {
+  Widget _buildFilterChip(String label, String value, {IconData? icon}) {
     final selected = _filter == value;
+    final isToggle =
+        categories.contains(value) || value.startsWith('person:');
     return Padding(
       padding: const EdgeInsets.only(right: 6),
       child: GestureDetector(
         onTap: () => setState(() {
-          if (categories.contains(value)) {
-            _filter = _filter == value ? 'all' : value;
-          } else {
-            _filter = value;
-          }
+          _filter = isToggle && _filter == value ? 'all' : value;
         }),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -426,13 +446,25 @@ class _PrayTabState extends State<PrayTab> {
             ),
             borderRadius: BorderRadius.circular(20),
           ),
-          child: Text(
-            label,
-            style: GoogleFonts.sourceSans3(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: selected ? AppColors.bgDark : AppColors.textMuted,
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(icon,
+                    size: 12,
+                    color:
+                        selected ? AppColors.bgDark : AppColors.textMuted),
+                const SizedBox(width: 4),
+              ],
+              Text(
+                label,
+                style: GoogleFonts.sourceSans3(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: selected ? AppColors.bgDark : AppColors.textMuted,
+                ),
+              ),
+            ],
           ),
         ),
       ),

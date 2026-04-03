@@ -4,6 +4,7 @@ class Person {
   String notes;
   List<String> tags;
   List<String> needs;
+  String email;
   String contactFreq;
   String? lastContact;
 
@@ -13,6 +14,7 @@ class Person {
     this.notes = '',
     this.tags = const [],
     this.needs = const [],
+    this.email = '',
     this.contactFreq = 'Monthly',
     this.lastContact,
   });
@@ -23,6 +25,7 @@ class Person {
         'notes': notes,
         'tags': tags,
         'needs': needs,
+        'email': email,
         'contactFreq': contactFreq,
         'lastContact': lastContact,
       };
@@ -33,6 +36,7 @@ class Person {
         notes: json['notes'] as String? ?? '',
         tags: (json['tags'] as List<dynamic>?)?.cast<String>() ?? [],
         needs: (json['needs'] as List<dynamic>?)?.cast<String>() ?? [],
+        email: json['email'] as String? ?? '',
         contactFreq: json['contactFreq'] as String? ?? 'Monthly',
         lastContact: json['lastContact'] as String?,
       );

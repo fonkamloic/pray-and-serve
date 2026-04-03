@@ -41,8 +41,10 @@ void main() {
           reminderDays: reminderDays,
           flock: flock ?? [],
           careLogs: careLogs ?? [],
+          groups: const [],
           onUpdateFlock: onUpdateFlock ?? (_) {},
           onUpdateCareLogs: onUpdateCareLogs ?? (_) {},
+          onUpdateGroups: (_) {},
         ),
       ),
     );
@@ -187,8 +189,7 @@ void main() {
       await tester.tap(find.text('Add Person'));
       await tester.pumpAndSettle();
 
-      // The ElevatedButton save label should say "Add Person"
-      // There is one in the toolbar and one in the bottom sheet footer
+      // Toolbar button + modal save button
       expect(find.text('Add Person'), findsNWidgets(2));
     });
 
@@ -269,6 +270,13 @@ void main() {
       // only rebuilds when setModalState is called.  Change the dropdown
       // (which calls setModalState) so the save button picks up the new
       // name value.
+      // Scroll down to make the dropdown visible (email field added in v1.1)
+      await tester.scrollUntilVisible(
+        find.text('Monthly'),
+        50,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pumpAndSettle();
       // Open the dropdown
       await tester.tap(find.text('Monthly'));
       await tester.pumpAndSettle();

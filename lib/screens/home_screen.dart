@@ -14,7 +14,11 @@ import '../models/constants.dart';
 import '../widgets/pray_tab.dart';
 import '../widgets/journal_tab.dart';
 import '../widgets/serve_tab.dart';
+import '../models/serve_group.dart';
 import '../services/backup_service.dart';
+import '../services/code_push_client.dart';
+import '../services/sync_service.dart';
+import 'sync_screen.dart';
 
 int daysAgo(String? dateStr) {
   if (dateStr == null || dateStr.isEmpty) return 999999;
@@ -72,6 +76,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<JournalEntry> _journal = [];
   List<Person> _flock = [];
   List<CareLog> _careLogs = [];
+  List<ServeGroup> _serveGroups = [];
 
   String? _pendingPrayText;
   String? _pendingJournalText;
@@ -82,6 +87,9 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _biometricEnabled = false;
   final _localAuth = LocalAuthentication();
 
+  late final SyncService _syncService;
+  StreamSubscription<SyncEvent>? _syncSub;
+
   bool _prayReminderEnabled = false;
   TimeOfDay _prayReminderTime = const TimeOfDay(hour: 7, minute: 0);
   bool _journalReminderEnabled = false;
@@ -89,11 +97,43 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _serveReminderEnabled = false;
   TimeOfDay _serveReminderTime = const TimeOfDay(hour: 9, minute: 0);
 
+  String? _patchVersion;
+
   @override
   void initState() {
     super.initState();
     _loadData();
+    _loadPatchInfo();
     _initSharingListener();
+    _syncService = SyncService(
+      widget.storage,
+      BackupService(widget.storage),
+    );
+    _syncService.init().then((_) {
+      _syncSub = _syncService.events.listen(_onSyncEvent);
+    });
+  }
+
+  void _onSyncEvent(SyncEvent event) {
+    if (!mounted) return;
+    switch (event) {
+      case SyncEventSynced(:final deviceName, :final added):
+        if (added > 0) {
+          _loadData();
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                'Synced with $deviceName — $added new item(s) added.'),
+          ));
+        }
+      case SyncEventPaired(:final deviceName):
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Paired with $deviceName.')),
+        );
+      case SyncEventFailed(:final error):
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error)),
+        );
+    }
   }
 
   void _initSharingListener() {
@@ -169,6 +209,8 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _sharingSubscription?.cancel();
+    _syncSub?.cancel();
+    _syncService.dispose();
     super.dispose();
   }
 
@@ -180,6 +222,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _journal = widget.storage.getJournal();
       _flock = widget.storage.getFlock();
       _careLogs = widget.storage.getCareLogs();
+      _serveGroups = widget.storage.getServeGroups();
       _prayReminderEnabled = widget.storage.getPrayReminderEnabled();
       _prayReminderTime = TimeOfDay(
         hour: widget.storage.getPrayReminderHour(),
@@ -197,6 +240,11 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       _biometricEnabled = widget.storage.getBiometricEnabled();
     });
+  }
+
+  Future<void> _loadPatchInfo() async {
+    final version = await CodePush.currentPatchVersion;
+    if (mounted) setState(() => _patchVersion = version);
   }
 
   // Stats
@@ -239,6 +287,14 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _careLogs = fn(List.from(_careLogs));
       widget.storage.saveCareLogs(_careLogs);
+    });
+  }
+
+  // ServeGroup CRUD
+  void updateServeGroups(List<ServeGroup> Function(List<ServeGroup>) fn) {
+    setState(() {
+      _serveGroups = fn(List.from(_serveGroups));
+      widget.storage.saveServeGroups(_serveGroups);
     });
   }
 
@@ -346,6 +402,18 @@ class _HomeScreenState extends State<HomeScreen> {
     await widget.storage.setBiometricEnabled(enabled);
   }
 
+  void _openSync() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SyncScreen(
+          syncService: _syncService,
+          storage: widget.storage,
+        ),
+      ),
+    );
+  }
+
   Future<void> _exportBackup() async {
     try {
       await BackupService(widget.storage).exportBackup();
@@ -439,8 +507,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   reminderDays: _reminderDays,
                   flock: _flock,
                   careLogs: _careLogs,
+                  groups: _serveGroups,
                   onUpdateFlock: updateFlock,
                   onUpdateCareLogs: updateCareLogs,
+                  onUpdateGroups: updateServeGroups,
                   pendingText: _pendingServeText,
                   onPendingConsumed: () =>
                       setState(() => _pendingServeText = null),
@@ -686,6 +756,20 @@ class _HomeScreenState extends State<HomeScreen> {
                     letterSpacing: 1.5)),
           ),
           const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _openSync,
+              icon: const Icon(Icons.sync, size: 16),
+              label: const Text('Sync with Device'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.gold,
+                side: const BorderSide(color: AppColors.gold),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
@@ -714,6 +798,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: Text(
+              _patchVersion != null &&
+                      RegExp(r'^[a-zA-Z0-9._-]+$').hasMatch(_patchVersion!)
+                  ? 'v1.1.0 (patch $_patchVersion)'
+                  : 'v1.1.0',
+              style: GoogleFonts.sourceSans3(
+                  fontSize: 12, color: AppColors.textMuted),
+            ),
           ),
         ],
       ),

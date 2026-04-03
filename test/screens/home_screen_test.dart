@@ -542,7 +542,7 @@ void main() {
         expect(find.text('Serve'), findsNWidgets(2));
       });
 
-      testWidgets('shows three reminder toggle switches (all off by default)',
+      testWidgets('shows four toggle switches (3 reminders + biometric, all off by default)',
           (tester) async {
         await initStorage();
         await tester.pumpWidget(buildApp());
@@ -551,8 +551,8 @@ void main() {
         await tester.tap(find.byIcon(Icons.settings_outlined));
         await tester.pumpAndSettle();
 
-        // There should be 3 Switch.adaptive widgets
-        expect(find.byType(Switch), findsNWidgets(3));
+        // 3 reminder switches + 1 biometric lock switch
+        expect(find.byType(Switch), findsNWidgets(4));
       });
 
       testWidgets('role dropdown defaults to Member', (tester) async {
@@ -890,11 +890,10 @@ void main() {
         await tester.tap(find.byIcon(Icons.settings_outlined));
         await tester.pumpAndSettle();
 
-        // All three switches should be on
-        final switches = tester.widgetList<Switch>(find.byType(Switch));
-        for (final s in switches) {
-          expect(s.value, isTrue);
-        }
+        // 3 reminder switches should be on; biometric switch should be off
+        final switches = tester.widgetList<Switch>(find.byType(Switch)).toList();
+        final onCount = switches.where((s) => s.value).length;
+        expect(onCount, 3);
       });
 
       testWidgets('loads all notification prefs as false by default',
@@ -1089,10 +1088,9 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.text('Pastor'), findsOneWidget);
-        final switches = tester.widgetList<Switch>(find.byType(Switch));
-        for (final s in switches) {
-          expect(s.value, isTrue);
-        }
+        final switches = tester.widgetList<Switch>(find.byType(Switch)).toList();
+        final onCount = switches.where((s) => s.value).length;
+        expect(onCount, 3); // 3 reminders on, biometric off
       });
     });
   });

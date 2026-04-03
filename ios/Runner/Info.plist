@@ -72,5 +72,15 @@
 		<false/>
 		<key>NSFaceIDUsageDescription</key>
 		<string>Pray &amp; Serve uses Face ID to protect your private data.</string>
+		<key>NSCameraUsageDescription</key>
+		<string>Pray &amp; Serve uses the camera to scan a QR code when pairing with another device for local sync.</string>
+		<key>NSLocalNetworkUsageDescription</key>
+		<string>Pray &amp; Serve uses your local network to sync privately with your other devices over WiFi. No data ever leaves your home network.</string>
+		<key>NSBonjourServices</key>
+		<array>
+			<string>_prayserve._tcp</string>
+		</array>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>Pray &amp; Serve does not access your photos. This permission is required by a system library.</string>
 	</dict>
 </plist>

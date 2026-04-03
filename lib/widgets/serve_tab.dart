@@ -1,21 +1,32 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:uuid/uuid.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_native_contact_picker/flutter_native_contact_picker.dart'
+    as cp;
 import '../theme/app_theme.dart';
 import '../models/person.dart';
 import '../models/care_log.dart';
+import '../models/serve_group.dart';
 import '../models/constants.dart';
 import '../screens/home_screen.dart';
 import 'bottom_sheet_modal.dart';
 import 'chip_selector.dart';
+
+const _contactsChannel =
+    MethodChannel('com.flutterplaza.pray_and_serve/contacts');
 
 class ServeTab extends StatefulWidget {
   final String role;
   final int reminderDays;
   final List<Person> flock;
   final List<CareLog> careLogs;
+  final List<ServeGroup> groups;
   final void Function(List<Person> Function(List<Person>)) onUpdateFlock;
   final void Function(List<CareLog> Function(List<CareLog>)) onUpdateCareLogs;
+  final void Function(List<ServeGroup> Function(List<ServeGroup>))
+      onUpdateGroups;
   final String? pendingText;
   final VoidCallback? onPendingConsumed;
 
@@ -25,8 +36,10 @@ class ServeTab extends StatefulWidget {
     required this.reminderDays,
     required this.flock,
     required this.careLogs,
+    required this.groups,
     required this.onUpdateFlock,
     required this.onUpdateCareLogs,
+    required this.onUpdateGroups,
     this.pendingText,
     this.onPendingConsumed,
   });
@@ -78,9 +91,47 @@ class _ServeTabState extends State<ServeTab> {
           contactFreqToDays(p.contactFreq, widget.reminderDays))
       .toList();
 
-  void _showPersonModal({Person? existing, String? prefillNotes}) {
-    var name = existing?.name ?? '';
+  final _contactPicker = cp.FlutterNativeContactPicker();
+
+  Future<void> _importFromContacts() async {
+    try {
+      final contact = await _contactPicker.selectContact();
+      if (contact == null || !mounted) return;
+      String? email;
+      if (contact.fullName != null) {
+        try {
+          email = await _contactsChannel.invokeMethod<String>(
+            'getEmailForContact',
+            {'displayName': contact.fullName},
+          );
+        } catch (_) {
+          // Email lookup not available — user can enter manually.
+        }
+      }
+      if (!mounted) return;
+      _showPersonModal(
+        prefillName: contact.fullName,
+        prefillEmail: email,
+        prefillNotes: contact.phoneNumbers?.join(', '),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open contacts.')),
+        );
+      }
+    }
+  }
+
+  void _showPersonModal({
+    Person? existing,
+    String? prefillNotes,
+    String? prefillName,
+    String? prefillEmail,
+  }) {
+    var name = existing?.name ?? (prefillName ?? '');
     var notes = existing?.notes ?? (prefillNotes ?? '');
+    var email = existing?.email ?? (prefillEmail ?? '');
     var selectedTags = List<String>.from(existing?.tags ?? []);
     var selectedNeeds = List<String>.from(existing?.needs ?? []);
     var contactFreq = existing?.contactFreq ?? 'Monthly';
@@ -96,6 +147,7 @@ class _ServeTabState extends State<ServeTab> {
                 if (p.id == existing.id) {
                   p.name = name;
                   p.notes = notes;
+                  p.email = email;
                   p.tags = selectedTags;
                   p.needs = selectedNeeds;
                   p.contactFreq = contactFreq;
@@ -108,6 +160,7 @@ class _ServeTabState extends State<ServeTab> {
                   id: const Uuid().v4(),
                   name: name,
                   notes: notes,
+                  email: email,
                   tags: selectedTags,
                   needs: selectedNeeds,
                   contactFreq: contactFreq,
@@ -130,6 +183,17 @@ class _ServeTabState extends State<ServeTab> {
                 hintText: 'Their name...',
               ),
               onChanged: (v) => name = v,
+            ),
+            buildFieldLabel('Email'),
+            TextField(
+              controller: TextEditingController(text: email),
+              style: GoogleFonts.sourceSans3(
+                  fontSize: 14, color: AppColors.textPrimary),
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(
+                hintText: 'email@example.com (optional)',
+              ),
+              onChanged: (v) => email = v,
             ),
             buildFieldLabel('Notes about their situation'),
             TextField(
@@ -202,6 +266,124 @@ class _ServeTabState extends State<ServeTab> {
     );
   }
 
+  List<Person> get _flockWithEmail =>
+      widget.flock.where((p) => p.email.trim().isNotEmpty).toList();
+
+  void _showGroupEmailModal() {
+    final withEmail = _flockWithEmail;
+    if (withEmail.isEmpty) return;
+
+    final selected = <String>{...withEmail.map((p) => p.id)};
+    var subject = '';
+    var body = '';
+
+    showAppBottomSheet(
+      context: context,
+      title: 'Email Group',
+      saveLabel: 'Open Email App',
+      canSave: () =>
+          subject.trim().isNotEmpty &&
+          body.trim().isNotEmpty &&
+          selected.isNotEmpty,
+      onSave: () {
+        // Log a CareLog for each selected person.
+        final now = todayStr();
+        final logNote = 'Subject: $subject\n\n$body';
+        for (final personId in selected) {
+          widget.onUpdateCareLogs((prev) => [
+                CareLog(
+                  id: const Uuid().v4(),
+                  personId: personId,
+                  date: now,
+                  type: 'Email',
+                  note: logNote,
+                ),
+                ...prev,
+              ]);
+          widget.onUpdateFlock((prev) => prev.map((p) {
+                if (p.id == personId) p.lastContact = now;
+                return p;
+              }).toList());
+        }
+
+        // Build mailto: with BCC.
+        final bcc = withEmail
+            .where((p) => selected.contains(p.id))
+            .map((p) => p.email.trim())
+            .join(',');
+        final uri = Uri(
+          scheme: 'mailto',
+          query: 'bcc=${Uri.encodeComponent(bcc)}'
+              '&subject=${Uri.encodeComponent(subject)}'
+              '&body=${Uri.encodeComponent(body)}',
+        );
+        launchUrl(uri).then((launched) {
+          if (!launched && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                  content: Text(
+                      'No email app found. The email has been logged.')),
+            );
+          }
+        });
+      },
+      bodyBuilder: (context, setModalState) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            buildFieldLabel('Recipients (BCC)'),
+            ...withEmail.map((p) => CheckboxListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  activeColor: AppColors.gold,
+                  checkColor: AppColors.bgDark,
+                  title: Text(
+                    '${p.name} (${p.email})',
+                    style: GoogleFonts.sourceSans3(
+                        fontSize: 13, color: AppColors.textPrimary),
+                  ),
+                  value: selected.contains(p.id),
+                  onChanged: (v) {
+                    setModalState(() {
+                      if (v == true) {
+                        selected.add(p.id);
+                      } else {
+                        selected.remove(p.id);
+                      }
+                    });
+                  },
+                )),
+            const SizedBox(height: 4),
+            Text(
+              'Recipients will be in BCC — they won\'t see each other\'s email.',
+              style: GoogleFonts.sourceSans3(
+                  fontSize: 11, color: AppColors.textMuted, fontStyle: FontStyle.italic),
+            ),
+            buildFieldLabel('Subject'),
+            TextField(
+              style: GoogleFonts.sourceSans3(
+                  fontSize: 14, color: AppColors.textPrimary),
+              decoration: const InputDecoration(
+                hintText: 'Email subject…',
+              ),
+              onChanged: (v) => subject = v,
+            ),
+            buildFieldLabel('Body'),
+            TextField(
+              style: GoogleFonts.sourceSans3(
+                  fontSize: 14, color: AppColors.textPrimary),
+              maxLines: 6,
+              decoration: const InputDecoration(
+                hintText: 'Write your message…',
+              ),
+              onChanged: (v) => body = v,
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _showLogContactModal(Person person) {
     var type = 'Call';
     var note = '';
@@ -264,7 +446,7 @@ class _ServeTabState extends State<ServeTab> {
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
       child: Column(
         children: [
-          // Toolbar
+          // Title + actions
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -278,15 +460,37 @@ class _ServeTabState extends State<ServeTab> {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              const SizedBox(width: 8),
-              ElevatedButton.icon(
-                onPressed: () => _showPersonModal(),
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Add Person'),
-                style: ElevatedButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_flockWithEmail.isNotEmpty)
+                    IconButton(
+                      icon: const Icon(Icons.mail_outline,
+                          size: 20, color: AppColors.gold),
+                      tooltip: 'Email group',
+                      constraints: const BoxConstraints(),
+                      padding: const EdgeInsets.all(6),
+                      onPressed: _showGroupEmailModal,
+                    ),
+                  IconButton(
+                    icon: const Icon(Icons.contacts_outlined,
+                        size: 20, color: AppColors.gold),
+                    tooltip: 'From contacts',
+                    constraints: const BoxConstraints(),
+                    padding: const EdgeInsets.all(6),
+                    onPressed: _importFromContacts,
+                  ),
+                  const SizedBox(width: 6),
+                  ElevatedButton.icon(
+                    onPressed: () => _showPersonModal(),
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Add Person'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 12),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -304,7 +508,8 @@ class _ServeTabState extends State<ServeTab> {
                 _buildSubTab(0, 'People'),
                 _buildSubTab(
                     1, 'Need Contact (${_overdueFlock.length})'),
-                _buildSubTab(2, 'Care Log'),
+                _buildSubTab(2, 'Groups'),
+                _buildSubTab(3, 'Care Log'),
               ],
             ),
           ),
@@ -317,6 +522,7 @@ class _ServeTabState extends State<ServeTab> {
               children: [
                 _buildPeopleList(),
                 _buildOverdueList(),
+                _buildGroupsList(),
                 _buildCareLogList(),
               ],
             ),
@@ -832,6 +1038,408 @@ class _ServeTabState extends State<ServeTab> {
                 ),
             ],
           ),
+        );
+      },
+    );
+  }
+
+  // ---- GROUPS LIST ----
+  Widget _buildGroupsList() {
+    return Column(
+      children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: ElevatedButton.icon(
+            onPressed: () => _showGroupModal(),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('New Group'),
+            style: ElevatedButton.styleFrom(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Expanded(
+          child: widget.groups.isEmpty
+              ? Center(
+                  child: Text(
+                    'Create groups to email or text\nmultiple people at once.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.sourceSans3(
+                        fontSize: 14, color: AppColors.textMuted),
+                  ),
+                )
+              : ListView.separated(
+                  itemCount: widget.groups.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (ctx, i) =>
+                      _buildGroupCard(widget.groups[i]),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGroupCard(ServeGroup group) {
+    final members =
+        widget.flock.where((p) => group.personIds.contains(p.id)).toList();
+    final memberNames =
+        members.map((p) => p.name).join(', ');
+    final emailCount = members.where((p) => p.email.trim().isNotEmpty).length;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.bgCard,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  group.name,
+                  style: GoogleFonts.cormorantGaramond(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary),
+                ),
+              ),
+              Text(
+                '${members.length} people',
+                style: GoogleFonts.sourceSans3(
+                    fontSize: 12, color: AppColors.textMuted),
+              ),
+            ],
+          ),
+          if (memberNames.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              memberNames,
+              style: GoogleFonts.sourceSans3(
+                  fontSize: 12, color: AppColors.textSecondary),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              if (emailCount > 0)
+                _groupActionButton(
+                  icon: Icons.mail_outline,
+                  label: 'BCC Email',
+                  onTap: () => _showGroupEmailModalForGroup(group),
+                ),
+              if (emailCount > 0) const SizedBox(width: 8),
+              _groupActionButton(
+                icon: Icons.sms_outlined,
+                label: 'Broadcast Text',
+                onTap: () => _showBroadcastTextModal(group),
+              ),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.edit_outlined,
+                    size: 16, color: AppColors.textMuted),
+                constraints: const BoxConstraints(),
+                padding: const EdgeInsets.all(4),
+                onPressed: () => _showGroupModal(existing: group),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline,
+                    size: 16, color: AppColors.textMuted),
+                constraints: const BoxConstraints(),
+                padding: const EdgeInsets.all(4),
+                onPressed: () {
+                  widget.onUpdateGroups(
+                      (prev) => prev.where((g) => g.id != group.id).toList());
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _groupActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon, size: 14),
+      label: Text(label),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.gold,
+        side: const BorderSide(color: AppColors.gold),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        textStyle: GoogleFonts.sourceSans3(fontSize: 12),
+      ),
+    );
+  }
+
+  void _showGroupModal({ServeGroup? existing}) {
+    var name = existing?.name ?? '';
+    var selectedIds = <String>{...existing?.personIds ?? []};
+
+    showAppBottomSheet(
+      context: context,
+      title: existing != null ? 'Edit Group' : 'New Group',
+      saveLabel: existing != null ? 'Update' : 'Create Group',
+      canSave: () => name.trim().isNotEmpty && selectedIds.isNotEmpty,
+      onSave: () {
+        if (existing != null) {
+          widget.onUpdateGroups((prev) => prev.map((g) {
+                if (g.id == existing.id) {
+                  g.name = name;
+                  g.personIds = selectedIds.toList();
+                }
+                return g;
+              }).toList());
+        } else {
+          widget.onUpdateGroups((prev) => [
+                ServeGroup(
+                  id: const Uuid().v4(),
+                  name: name,
+                  personIds: selectedIds.toList(),
+                ),
+                ...prev,
+              ]);
+        }
+      },
+      bodyBuilder: (context, setModalState) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            buildFieldLabel('Group Name'),
+            TextField(
+              autofocus: true,
+              controller: TextEditingController(text: name),
+              style: GoogleFonts.sourceSans3(
+                  fontSize: 14, color: AppColors.textPrimary),
+              decoration: const InputDecoration(
+                hintText: 'e.g., Small Group, Elders, Youth…',
+              ),
+              onChanged: (v) => name = v,
+            ),
+            buildFieldLabel('Members'),
+            ...widget.flock.map((p) => CheckboxListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  activeColor: AppColors.gold,
+                  checkColor: AppColors.bgDark,
+                  title: Text(
+                    p.name,
+                    style: GoogleFonts.sourceSans3(
+                        fontSize: 13, color: AppColors.textPrimary),
+                  ),
+                  subtitle: p.email.trim().isNotEmpty
+                      ? Text(p.email,
+                          style: GoogleFonts.sourceSans3(
+                              fontSize: 11, color: AppColors.textMuted))
+                      : null,
+                  value: selectedIds.contains(p.id),
+                  onChanged: (v) {
+                    setModalState(() {
+                      if (v == true) {
+                        selectedIds.add(p.id);
+                      } else {
+                        selectedIds.remove(p.id);
+                      }
+                    });
+                  },
+                )),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showGroupEmailModalForGroup(ServeGroup group) {
+    final members =
+        widget.flock.where((p) => group.personIds.contains(p.id)).toList();
+    final withEmail = members.where((p) => p.email.trim().isNotEmpty).toList();
+    if (withEmail.isEmpty) return;
+
+    final selected = <String>{...withEmail.map((p) => p.id)};
+    var subject = '';
+    var body = '';
+
+    showAppBottomSheet(
+      context: context,
+      title: 'Email \u2014 ${group.name}',
+      saveLabel: 'Open Email App',
+      canSave: () =>
+          subject.trim().isNotEmpty &&
+          body.trim().isNotEmpty &&
+          selected.isNotEmpty,
+      onSave: () {
+        final now = todayStr();
+        final logNote = 'Subject: $subject\n\n$body';
+        for (final personId in selected) {
+          widget.onUpdateCareLogs((prev) => [
+                CareLog(
+                  id: const Uuid().v4(),
+                  personId: personId,
+                  date: now,
+                  type: 'Email',
+                  note: logNote,
+                ),
+                ...prev,
+              ]);
+          widget.onUpdateFlock((prev) => prev.map((p) {
+                if (p.id == personId) p.lastContact = now;
+                return p;
+              }).toList());
+        }
+
+        final bcc = withEmail
+            .where((p) => selected.contains(p.id))
+            .map((p) => p.email.trim())
+            .join(',');
+        final uri = Uri(
+          scheme: 'mailto',
+          query: 'bcc=${Uri.encodeComponent(bcc)}'
+              '&subject=${Uri.encodeComponent(subject)}'
+              '&body=${Uri.encodeComponent(body)}',
+        );
+        launchUrl(uri);
+      },
+      bodyBuilder: (context, setModalState) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            buildFieldLabel('Recipients (BCC)'),
+            ...withEmail.map((p) => CheckboxListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  activeColor: AppColors.gold,
+                  checkColor: AppColors.bgDark,
+                  title: Text(
+                    '${p.name} (${p.email})',
+                    style: GoogleFonts.sourceSans3(
+                        fontSize: 13, color: AppColors.textPrimary),
+                  ),
+                  value: selected.contains(p.id),
+                  onChanged: (v) {
+                    setModalState(() {
+                      if (v == true) {
+                        selected.add(p.id);
+                      } else {
+                        selected.remove(p.id);
+                      }
+                    });
+                  },
+                )),
+            const SizedBox(height: 4),
+            Text(
+              'Recipients will be in BCC \u2014 they won\'t see each other\'s email.',
+              style: GoogleFonts.sourceSans3(
+                  fontSize: 11,
+                  color: AppColors.textMuted,
+                  fontStyle: FontStyle.italic),
+            ),
+            buildFieldLabel('Subject'),
+            TextField(
+              style: GoogleFonts.sourceSans3(
+                  fontSize: 14, color: AppColors.textPrimary),
+              decoration: const InputDecoration(hintText: 'Email subject\u2026'),
+              onChanged: (v) => subject = v,
+            ),
+            buildFieldLabel('Body'),
+            TextField(
+              style: GoogleFonts.sourceSans3(
+                  fontSize: 14, color: AppColors.textPrimary),
+              maxLines: 6,
+              decoration:
+                  const InputDecoration(hintText: 'Write your message\u2026'),
+              onChanged: (v) => body = v,
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showBroadcastTextModal(ServeGroup group) {
+    final members =
+        widget.flock.where((p) => group.personIds.contains(p.id)).toList();
+    final withPhone = members
+        .where((p) => p.notes.trim().isNotEmpty)
+        .toList();
+    var message = '';
+
+    showAppBottomSheet(
+      context: context,
+      title: 'Text \u2014 ${group.name}',
+      saveLabel: 'Open Messages App',
+      canSave: () => message.trim().isNotEmpty,
+      onSave: () {
+        final now = todayStr();
+        // Log contact for each member.
+        for (final person in members) {
+          widget.onUpdateCareLogs((prev) => [
+                CareLog(
+                  id: const Uuid().v4(),
+                  personId: person.id,
+                  date: now,
+                  type: 'Text',
+                  note: message,
+                ),
+                ...prev,
+              ]);
+          widget.onUpdateFlock((prev) => prev.map((p) {
+                if (p.id == person.id) p.lastContact = now;
+                return p;
+              }).toList());
+        }
+
+        // Build sms: URI with all phone numbers.
+        final phones = withPhone
+            .map((p) => p.notes.split(',').first.trim())
+            .where((n) => n.isNotEmpty)
+            .join(',');
+        if (phones.isNotEmpty) {
+          final uri = Uri(
+            scheme: 'sms',
+            path: phones,
+            queryParameters: {'body': message},
+          );
+          launchUrl(uri);
+        }
+      },
+      bodyBuilder: (context, setModalState) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            buildFieldLabel(
+                'Sending to ${members.length} people in ${group.name}'),
+            ...members.map((p) => Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Text(
+                    '\u2022 ${p.name}',
+                    style: GoogleFonts.sourceSans3(
+                        fontSize: 13, color: AppColors.textSecondary),
+                  ),
+                )),
+            buildFieldLabel('Message'),
+            TextField(
+              autofocus: true,
+              style: GoogleFonts.sourceSans3(
+                  fontSize: 14, color: AppColors.textPrimary),
+              maxLines: 4,
+              decoration: const InputDecoration(
+                hintText: 'Write your message\u2026',
+              ),
+              onChanged: (v) => message = v,
+            ),
+          ],
         );
       },
     );
