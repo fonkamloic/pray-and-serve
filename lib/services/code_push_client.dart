@@ -8,7 +8,7 @@ const _channel = MethodChannel('flutter/codepush');
 
 const _serverUrl = 'https://api.codepush.flutterplaza.com';
 const _appId = '2ca7dd88-547b-4281-9484-91501e596aa6'; // iOS app
-const _releaseVersion = '1.2.0+11';
+const _releaseVersion = '1.2.0+12';
 
 class CodePush {
   /// Checks the server for a new patch and installs it if available.
@@ -33,9 +33,18 @@ class CodePush {
       // Check for update.
       final request = await client.getUrl(uri).timeout(const Duration(seconds: 10));
       final resp = await request.close().timeout(const Duration(seconds: 10));
-      final body = await resp.transform(utf8.decoder).join().timeout(const Duration(seconds: 10));
 
-      if (resp.statusCode == 204) return (false, 'No update (204)');
+      if (resp.statusCode == 204) {
+        await resp.drain<void>();
+        return (false, 'No update (204)');
+      }
+
+      final bodyBytes = await resp.fold<List<int>>(
+        <int>[],
+        (prev, chunk) => prev..addAll(chunk),
+      ).timeout(const Duration(seconds: 10));
+      final body = utf8.decode(bodyBytes);
+
       if (resp.statusCode != 200) return (false, 'Server ${resp.statusCode}: $body');
 
       final data = jsonDecode(body) as Map<String, dynamic>;

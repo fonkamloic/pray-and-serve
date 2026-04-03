@@ -813,11 +813,11 @@ class _HomeScreenState extends State<HomeScreen> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 8),
             decoration: BoxDecoration(
-              color: const Color(0xFFE65100),
+              color: const Color(0xFF0D47A1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
-              'PATCHED VIA OTA',
+              'OTA IS LIVE! PATCH APPLIED!',
               textAlign: TextAlign.center,
               style: GoogleFonts.sourceSans3(
                   fontSize: 13,
