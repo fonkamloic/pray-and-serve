@@ -78,9 +78,10 @@ class _AppShellState extends State<_AppShell> with WidgetsBindingObserver {
   Timer? _codePushTimer;
   bool _updateReady = false;
   DateTime? _lastUpdateCheck;
-  String _codePushDebug = 'Checking...';
+  String _codePushDebug = 'init';
 
-  static const _minCheckInterval = Duration(minutes: 15);
+  // Disabled throttle for debugging.
+  // static const _minCheckInterval = Duration(minutes: 15);
 
   @override
   void initState() {
@@ -99,11 +100,7 @@ class _AppShellState extends State<_AppShell> with WidgetsBindingObserver {
   }
 
   Future<void> _checkForUpdate() async {
-    if (_lastUpdateCheck != null &&
-        DateTime.now().difference(_lastUpdateCheck!) < _minCheckInterval) {
-      return;
-    }
-    _lastUpdateCheck = DateTime.now();
+    if (mounted) setState(() => _codePushDebug = 'Calling server...');
 
     final (installed, status) = await CodePush.checkAndInstallDebug();
     if (mounted) {

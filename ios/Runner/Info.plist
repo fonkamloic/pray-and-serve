@@ -85,6 +85,6 @@
 		<key>FLTCodePushEnabled</key>
 		<true/>
 		<key>FLTCodePushReleaseVersion</key>
-		<string>1.2.0+9</string>
+		<string>1.2.0+10</string>
 	</dict>
 </plist>

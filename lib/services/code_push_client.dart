@@ -8,7 +8,7 @@ const _channel = MethodChannel('flutter/codepush');
 
 const _serverUrl = 'https://api.codepush.flutterplaza.com';
 const _appId = '2ca7dd88-547b-4281-9484-91501e596aa6'; // iOS app
-const _releaseVersion = '1.2.0+9';
+const _releaseVersion = '1.2.0+10';
 
 class CodePush {
   /// Checks the server for a new patch and installs it if available.
