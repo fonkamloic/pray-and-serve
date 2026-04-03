@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data' show Uint8List;
 import 'dart:ui' show Rect;
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -91,11 +92,33 @@ class BackupService {
   Future<void> exportBackup({Rect? shareOrigin}) async {
     final today = DateTime.now().toIso8601String().split('T')[0];
     final json = const JsonEncoder.withIndent('  ').convert(buildBackupData());
-    final dir = await getApplicationDocumentsDirectory();
-    final file = File('${dir.path}/pray_and_serve_backup_$today.json');
+    final fileName = 'pray_and_serve_backup_$today.json';
+    final bytes = utf8.encode(json);
+
+    // Try native save dialog first (most reliable on iOS).
+    final savePath = await FilePicker.platform.saveFile(
+      dialogTitle: 'Save Backup',
+      fileName: fileName,
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+      bytes: Uint8List.fromList(bytes),
+    );
+
+    if (savePath != null) {
+      // On some platforms saveFile writes the file; on others we must write.
+      final saved = File(savePath);
+      if (!await saved.exists()) {
+        await saved.writeAsBytes(bytes);
+      }
+      return;
+    }
+
+    // Fallback: share sheet.
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/$fileName');
     await file.writeAsString(json);
     await Share.shareXFiles(
-      [XFile(file.path)],
+      [XFile(file.path, mimeType: 'application/json', name: fileName)],
       subject: 'Pray & Serve Backup – $today',
       sharePositionOrigin: shareOrigin,
     );

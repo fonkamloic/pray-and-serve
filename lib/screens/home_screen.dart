@@ -425,7 +425,8 @@ class _HomeScreenState extends State<HomeScreen> {
           ? box.localToGlobal(Offset.zero) & box.size
           : null;
       await BackupService(widget.storage).exportBackup(shareOrigin: origin);
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('Export backup failed: $e\n$stack');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Export failed: $e')),
