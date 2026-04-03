@@ -104,14 +104,9 @@ class _AppShellState extends State<_AppShell> with WidgetsBindingObserver {
     }
     _lastUpdateCheck = DateTime.now();
 
-    try {
-      final update = await CodePush.checkForUpdate();
-      if (update.isUpdateAvailable) {
-        await CodePush.downloadAndApply();
-        if (mounted) setState(() => _updateReady = true);
-      }
-    } catch (_) {
-      // App works fine without patches — fail silently.
+    final installed = await CodePush.checkAndInstall();
+    if (installed && mounted) {
+      setState(() => _updateReady = true);
     }
   }
 

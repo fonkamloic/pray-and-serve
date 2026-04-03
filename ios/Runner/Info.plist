@@ -82,5 +82,9 @@
 		</array>
 		<key>NSPhotoLibraryUsageDescription</key>
 		<string>Pray &amp; Serve does not access your photos. This permission is required by a system library.</string>
+		<key>FLTCodePushEnabled</key>
+		<true/>
+		<key>FLTCodePushReleaseVersion</key>
+		<string>1.2.0+7</string>
 	</dict>
 </plist>
