@@ -809,6 +809,24 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF2E7D32),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              'OTA PATCH ACTIVE',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.sourceSans3(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  letterSpacing: 1.2),
+            ),
+          ),
+          const SizedBox(height: 8),
           Center(
             child: Text(
               _patchVersion != null &&
