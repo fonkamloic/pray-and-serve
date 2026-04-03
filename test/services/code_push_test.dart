@@ -1,6 +1,6 @@
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart' hide CodePush, UpdateInfo, PatchInfo, CodePushException;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutterplaza_code_push/flutterplaza_code_push.dart';
+import 'package:pray_and_serve/services/code_push_client.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
