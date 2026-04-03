@@ -8,12 +8,18 @@ const _channel = MethodChannel('flutter/codepush');
 
 const _serverUrl = 'https://api.codepush.flutterplaza.com';
 const _appId = '2ca7dd88-547b-4281-9484-91501e596aa6'; // iOS app
-const _releaseVersion = '1.2.0+8';
+const _releaseVersion = '1.2.0+9';
 
 class CodePush {
   /// Checks the server for a new patch and installs it if available.
   /// Returns true if a patch was downloaded and installed.
   static Future<bool> checkAndInstall() async {
+    final (result, _) = await checkAndInstallDebug();
+    return result;
+  }
+
+  /// Same as checkAndInstall but returns a debug status string.
+  static Future<(bool, String)> checkAndInstallDebug() async {
     try {
       final uri = Uri.parse(
         '$_serverUrl/api/v1/updates'
@@ -24,20 +30,21 @@ class CodePush {
       );
       final resp = await http.get(uri).timeout(const Duration(seconds: 15));
 
-      if (resp.statusCode == 204) return false; // No update.
-      if (resp.statusCode != 200) return false;
+      if (resp.statusCode == 204) return (false, 'No update (204)');
+      if (resp.statusCode != 200) return (false, 'Server ${resp.statusCode}');
 
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
-      if (data['patch_available'] != true) return false;
+      if (data['patch_available'] != true) return (false, 'No patch available');
 
       final patchUrl = data['patch_url'] as String?;
-      if (patchUrl == null || patchUrl.isEmpty) return false;
+      if (patchUrl == null || patchUrl.isEmpty) return (false, 'No patch URL');
 
       // Download the patch.
-      debugPrint('CodePush: downloading patch from $patchUrl');
       final patchResp =
           await http.get(Uri.parse(patchUrl)).timeout(const Duration(seconds: 60));
-      if (patchResp.statusCode != 200) return false;
+      if (patchResp.statusCode != 200) {
+        return (false, 'Download failed: ${patchResp.statusCode}');
+      }
 
       // Install via engine.
       final base64Data = base64Encode(patchResp.bodyBytes);
@@ -45,11 +52,12 @@ class CodePush {
         'CodePush.installPatch',
         [base64Data],
       );
-      debugPrint('CodePush: installPatch result=$success');
-      return success == true;
+      if (success == true) {
+        return (true, 'Installed! Restart to apply. (${patchResp.bodyBytes.length} bytes)');
+      }
+      return (false, 'installPatch returned $success');
     } catch (e) {
-      debugPrint('CodePush: checkAndInstall failed: $e');
-      return false;
+      return (false, 'Error: $e');
     }
   }
 

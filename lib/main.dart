@@ -78,6 +78,7 @@ class _AppShellState extends State<_AppShell> with WidgetsBindingObserver {
   Timer? _codePushTimer;
   bool _updateReady = false;
   DateTime? _lastUpdateCheck;
+  String _codePushDebug = 'Checking...';
 
   static const _minCheckInterval = Duration(minutes: 15);
 
@@ -104,9 +105,12 @@ class _AppShellState extends State<_AppShell> with WidgetsBindingObserver {
     }
     _lastUpdateCheck = DateTime.now();
 
-    final installed = await CodePush.checkAndInstall();
-    if (installed && mounted) {
-      setState(() => _updateReady = true);
+    final (installed, status) = await CodePush.checkAndInstallDebug();
+    if (mounted) {
+      setState(() {
+        _codePushDebug = status;
+        if (installed) _updateReady = true;
+      });
     }
   }
 
@@ -144,9 +148,27 @@ class _AppShellState extends State<_AppShell> with WidgetsBindingObserver {
     }
     return Stack(
       children: [
-        HomeScreen(
-          storage: widget.storage,
-          notifications: widget.notifications,
+        Column(
+          children: [
+            SafeArea(
+              bottom: false,
+              child: Container(
+                width: double.infinity,
+                color: const Color(0xFF1A237E),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: Text(
+                  'CP: $_codePushDebug',
+                  style: const TextStyle(color: Colors.white, fontSize: 11),
+                ),
+              ),
+            ),
+            Expanded(
+              child: HomeScreen(
+                storage: widget.storage,
+                notifications: widget.notifications,
+              ),
+            ),
+          ],
         ),
         if (_updateReady)
           Positioned(
