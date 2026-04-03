@@ -813,8 +813,8 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Text(
               _patchVersion != null &&
                       RegExp(r'^[a-zA-Z0-9._-]+$').hasMatch(_patchVersion!)
-                  ? 'v1.2.0+7 (patch $_patchVersion)'
-                  : 'v1.2.0+7',
+                  ? 'v1.2.0+8 (patch $_patchVersion)'
+                  : 'v1.2.0+8',
               style: GoogleFonts.sourceSans3(
                   fontSize: 12, color: AppColors.textMuted),
             ),
