@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' show Rect;
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -87,15 +88,16 @@ class BackupService {
     return added;
   }
 
-  Future<void> exportBackup() async {
+  Future<void> exportBackup({Rect? shareOrigin}) async {
     final today = DateTime.now().toIso8601String().split('T')[0];
     final json = const JsonEncoder.withIndent('  ').convert(buildBackupData());
-    final dir = await getTemporaryDirectory();
+    final dir = await getApplicationDocumentsDirectory();
     final file = File('${dir.path}/pray_and_serve_backup_$today.json');
     await file.writeAsString(json);
     await Share.shareXFiles(
       [XFile(file.path)],
       subject: 'Pray & Serve Backup – $today',
+      sharePositionOrigin: shareOrigin,
     );
   }
 

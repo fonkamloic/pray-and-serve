@@ -418,9 +418,13 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<void> _exportBackup() async {
+  Future<void> _exportBackup(BuildContext ctx) async {
     try {
-      await BackupService(widget.storage).exportBackup();
+      final box = ctx.findRenderObject() as RenderBox?;
+      final origin = box != null
+          ? box.localToGlobal(Offset.zero) & box.size
+          : null;
+      await BackupService(widget.storage).exportBackup(shareOrigin: origin);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -777,8 +781,8 @@ class _HomeScreenState extends State<HomeScreen> {
           Row(
             children: [
               Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _exportBackup,
+                child: Builder(builder: (ctx) => OutlinedButton.icon(
+                  onPressed: () => _exportBackup(ctx),
                   icon: const Icon(Icons.upload_outlined, size: 16),
                   label: const Text('Export Backup'),
                   style: OutlinedButton.styleFrom(
@@ -786,7 +790,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     side: const BorderSide(color: AppColors.border),
                     padding: const EdgeInsets.symmetric(vertical: 10),
                   ),
-                ),
+                )),
               ),
               const SizedBox(width: 8),
               Expanded(
