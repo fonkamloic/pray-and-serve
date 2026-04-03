@@ -817,7 +817,7 @@ class _HomeScreenState extends State<HomeScreen> {
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
-              'OTA IS LIVE! PATCH APPLIED!',
+              'BUILD 13 - OTA PATCH WORKS!',
               textAlign: TextAlign.center,
               style: GoogleFonts.sourceSans3(
                   fontSize: 13,

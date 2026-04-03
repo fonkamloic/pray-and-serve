@@ -25,6 +25,22 @@ import Contacts
             return
           }
           result(self.queryEmailByName(displayName))
+        } else if call.method == "httpGet" {
+          guard let args = call.arguments as? [String: Any],
+                let urlString = args["url"] as? String,
+                let url = URL(string: urlString) else {
+            result(FlutterError(code: "invalid_arg", message: "url is required", details: nil))
+            return
+          }
+          self.httpGet(url: url, result: result)
+        } else if call.method == "httpGetBytes" {
+          guard let args = call.arguments as? [String: Any],
+                let urlString = args["url"] as? String,
+                let url = URL(string: urlString) else {
+            result(FlutterError(code: "invalid_arg", message: "url is required", details: nil))
+            return
+          }
+          self.httpGetBytes(url: url, result: result)
         } else {
           result(FlutterMethodNotImplemented)
         }
@@ -36,6 +52,39 @@ import Contacts
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+  }
+
+  private func httpGet(url: URL, result: @escaping FlutterResult) {
+    URLSession.shared.dataTask(with: url) { data, response, error in
+      DispatchQueue.main.async {
+        if let error = error {
+          result(FlutterError(code: "http_error", message: error.localizedDescription, details: nil))
+          return
+        }
+        guard let httpResp = response as? HTTPURLResponse else {
+          result(FlutterError(code: "http_error", message: "No response", details: nil))
+          return
+        }
+        let body = data != nil ? String(data: data!, encoding: .utf8) ?? "" : ""
+        result(["statusCode": httpResp.statusCode, "body": body])
+      }
+    }.resume()
+  }
+
+  private func httpGetBytes(url: URL, result: @escaping FlutterResult) {
+    URLSession.shared.dataTask(with: url) { data, response, error in
+      DispatchQueue.main.async {
+        if let error = error {
+          result(FlutterError(code: "http_error", message: error.localizedDescription, details: nil))
+          return
+        }
+        guard let httpResp = response as? HTTPURLResponse else {
+          result(FlutterError(code: "http_error", message: "No response", details: nil))
+          return
+        }
+        result(["statusCode": httpResp.statusCode, "bytes": data ?? Data()])
+      }
+    }.resume()
   }
 
   private func queryEmailByName(_ displayName: String) -> String? {
