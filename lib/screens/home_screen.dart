@@ -243,8 +243,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadPatchInfo() async {
-    final version = await CodePush.currentPatchVersion;
-    if (mounted) setState(() => _patchVersion = version);
+    try {
+      final patch = await CodePush.currentPatch;
+      if (mounted) setState(() => _patchVersion = patch?.version);
+    } catch (_) {
+      // Code push engine not available.
+    }
   }
 
   // Stats
@@ -804,8 +808,8 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Text(
               _patchVersion != null &&
                       RegExp(r'^[a-zA-Z0-9._-]+$').hasMatch(_patchVersion!)
-                  ? 'v1.1.0 (patch $_patchVersion)'
-                  : 'v1.1.0',
+                  ? 'v1.2.0 (patch $_patchVersion)'
+                  : 'v1.2.0',
               style: GoogleFonts.sourceSans3(
                   fontSize: 12, color: AppColors.textMuted),
             ),

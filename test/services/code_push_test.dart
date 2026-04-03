@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pray_and_serve/services/code_push_client.dart';
+import 'package:flutterplaza_code_push/flutterplaza_code_push.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -15,7 +15,7 @@ void main() {
   });
 
   group('CodePush.checkForUpdate', () {
-    test('returns true when update is available', () async {
+    test('returns update available when server has patch', () async {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (call) async {
         log.add(call);
@@ -31,7 +31,7 @@ void main() {
       expect(log.single.method, 'CodePush.checkForUpdate');
     });
 
-    test('returns false when no update', () async {
+    test('returns no update when server has nothing', () async {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (call) async {
         return {'isUpdateAvailable': false};
@@ -42,10 +42,11 @@ void main() {
       expect(result.patchVersion, isNull);
     });
 
-    test('returns false when engine not available', () async {
-      // No handler set — MissingPluginException
-      final result = await CodePush.checkForUpdate();
-      expect(result.isUpdateAvailable, isFalse);
+    test('throws CodePushException when engine not available', () async {
+      expect(
+        () => CodePush.checkForUpdate(),
+        throwsA(isA<CodePushException>()),
+      );
     });
   });
 
@@ -60,20 +61,18 @@ void main() {
       await CodePush.downloadAndApply();
       expect(log.single.method, 'CodePush.downloadAndApply');
     });
-
-    test('does not throw when engine not available', () async {
-      await expectLater(CodePush.downloadAndApply(), completes);
-    });
   });
 
-  group('CodePush.currentPatchVersion', () {
-    test('returns version when patched', () async {
+  group('CodePush.currentPatch', () {
+    test('returns PatchInfo when patched', () async {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (call) async {
         return {'version': 'p5', 'installedAt': 1234567890};
       });
 
-      expect(await CodePush.currentPatchVersion, 'p5');
+      final patch = await CodePush.currentPatch;
+      expect(patch, isNotNull);
+      expect(patch!.version, 'p5');
     });
 
     test('returns null when not patched', () async {
@@ -82,11 +81,7 @@ void main() {
         return null;
       });
 
-      expect(await CodePush.currentPatchVersion, isNull);
-    });
-
-    test('returns null when engine not available', () async {
-      expect(await CodePush.currentPatchVersion, isNull);
+      expect(await CodePush.currentPatch, isNull);
     });
   });
 
@@ -108,10 +103,6 @@ void main() {
 
       expect(await CodePush.isPatched, isFalse);
     });
-
-    test('returns false when engine not available', () async {
-      expect(await CodePush.isPatched, isFalse);
-    });
   });
 
   group('CodePush.rollback', () {
@@ -124,10 +115,6 @@ void main() {
 
       await CodePush.rollback();
       expect(log.single.method, 'CodePush.rollback');
-    });
-
-    test('does not throw when engine not available', () async {
-      await expectLater(CodePush.rollback(), completes);
     });
   });
 }

@@ -2,6 +2,7 @@ import 'dart:async' show Timer;
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'theme/app_theme.dart';
 import 'screens/home_screen.dart';
 import 'screens/lock_screen.dart';
@@ -9,14 +10,37 @@ import 'services/storage_service.dart';
 import 'services/notification_service.dart';
 import 'services/code_push_client.dart';
 
+/// Current data schema version. Bump this when storage format changes.
+const _kSchemaVersion = 2;
+const _kSchemaKey = 'ps-schema-version';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   GoogleFonts.config.allowRuntimeFetching = false;
+  await _runMigrations();
   final storage = StorageService();
   await storage.init();
   final notifications = NotificationService();
   await notifications.init();
   runApp(PrayAndServeApp(storage: storage, notifications: notifications));
+}
+
+/// Run any data migrations needed when upgrading from an older version.
+Future<void> _runMigrations() async {
+  final prefs = await SharedPreferences.getInstance();
+  final current = prefs.getInt(_kSchemaKey) ?? 1;
+
+  if (current < 2) {
+    // v1 → v2: ServeGroups storage added (ps-serve-groups).
+    // No data transform needed — getServeGroups() returns [] for missing key.
+    // Clean up the old codepush boot key if present (crash-rollback moved to engine).
+    await prefs.remove('codepush_boot_ok');
+  }
+
+  // Mark schema as current.
+  if (current != _kSchemaVersion) {
+    await prefs.setInt(_kSchemaKey, _kSchemaVersion);
+  }
 }
 
 class PrayAndServeApp extends StatelessWidget {
@@ -80,11 +104,14 @@ class _AppShellState extends State<_AppShell> with WidgetsBindingObserver {
     }
     _lastUpdateCheck = DateTime.now();
 
-    final (:isUpdateAvailable, patchVersion: _) =
-        await CodePush.checkForUpdate();
-    if (isUpdateAvailable) {
-      await CodePush.downloadAndApply();
-      if (mounted) setState(() => _updateReady = true);
+    try {
+      final update = await CodePush.checkForUpdate();
+      if (update.isUpdateAvailable) {
+        await CodePush.downloadAndApply();
+        if (mounted) setState(() => _updateReady = true);
+      }
+    } catch (_) {
+      // App works fine without patches — fail silently.
     }
   }
 
